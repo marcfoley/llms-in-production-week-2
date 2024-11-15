@@ -1,9 +1,45 @@
 import guardrails as gd
 import streamlit as st
 
+
+from phoenix.otel import register
+from redisvl.extensions.llmcache import SemanticCache  # ADD THIS IMPORT
+from openinference.instrumentation.openai import OpenAIInstrumentor
 from src.models import LLMResponse
 from src.prompt import PROMPT
+import redis
 
+@st.cache_resource
+def get_semantic_cache() -> SemanticCache:
+    """
+    Create a cache using RedisVL SemanticCache.
+    """
+    llmcache = SemanticCache(
+        name="llmcache",                    
+        prefix="llmcache",                   
+        redis_url="redis://redis:6379",      
+        distance_threshold=0.1               
+    )
+    return llmcache
+
+@st.cache_resource
+def get_exact_match_cache() -> redis.Redis:
+    """
+    Create a Redis connection for exact match cache using Redis Hash Map.
+    """
+    return redis.Redis(host='redis', port=6379, db=0)
+
+
+@st.cache_resource
+def instrument() -> None:
+    """
+    Instrument the OpenAI API using Phoenix.
+    """
+    tracer_provider = register(
+        project_name="my-llm-app",
+        endpoint="http://phoenix:6006/v1/traces",
+    )
+    OpenAIInstrumentor().instrument(tracer_provider=tracer_provider)
 
 @st.cache_resource
 def get_guard() -> gd.Guard:
